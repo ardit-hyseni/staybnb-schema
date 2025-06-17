@@ -1,0 +1,136 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  globalId  String     @unique @default(uuid())
+  email     String     @unique
+  name      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  reservations  Reservation[] @relation("GuestReservations")
+  
+  // A user can write many reviews
+  reviews       Review[]
+  // A user can be a host to many properties
+  properties Property[] @relation("HostProperties")
+}
+
+model Property {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  country     String
+  city        String
+  latitude    Float?
+  longitude   Float?
+  price       Decimal
+  cleaningFee Decimal?
+  imageSrc    String
+  beds        Int
+  baths       Int
+  guests      Int
+  propertyType PropertyType @default(HOUSE)
+
+  // A property can have many pictures
+  pictures    Picture[]
+  amenities   PropertyAmenity[]
+
+  // Relations for reservations and reviews
+  reservations Reservation[]
+  reviews      Review[]
+
+  hostId      Int
+  host        User     @relation("HostProperties", fields: [hostId], references: [id])
+}
+
+model Picture {
+  id         Int      @id @default(autoincrement())
+  url        String
+  propertyId Int
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade) // if property is deleted, so are its pictures
+
+  createdAt  DateTime @default(now())
+}
+
+model Amenity {
+  id          Int @id @default(autoincrement())
+  name        String @unique //  "Wi-Fi", "Pool", "Free Parking"
+  description String?
+
+  properties  PropertyAmenity[]
+}
+
+model PropertyAmenity {
+  property   Property @relation(fields: [propertyId], references: [id])
+  propertyId Int
+  amenity    Amenity  @relation(fields: [amenityId], references: [id])
+  amenityId  Int
+
+  @@id([propertyId, amenityId])
+}
+
+model Reservation {
+  id         String   @id @default(cuid())
+  checkIn    DateTime
+  checkOut   DateTime
+  totalPrice Decimal
+  createdAt  DateTime @default(now())
+
+  guestId    Int
+  guest      User     @relation("GuestReservations", fields: [guestId], references: [id])
+
+  propertyId Int
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  // --- NEW RELATIONSHIP ---
+  // A reservation can have one review
+  review     Review?
+}
+
+model Review {
+  id            String   @id @default(cuid())
+  rating        Int      // e.g., 1 to 5
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  // A review is for a specific reservation
+  // This ensures only guests who booked can leave a review
+  reservationId String      @unique // one-to-one relation
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  // For convenience, let's also link directly to the User (reviewer) and Property
+  reviewerId    Int
+  reviewer      User     @relation(fields: [reviewerId], references: [id])
+
+  propertyId    Int
+  property      Property @relation(fields: [propertyId], references: [id])
+
+  @@index([reviewerId])
+  @@index([propertyId])
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  VILLA
+  LOFT
+  CABIN
+}
